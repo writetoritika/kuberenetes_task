@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-deployment
+  labels:
+    app: myapp
+    type: webserver
+spec:  
+  minReadySeconds: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: webserver
+    spec:
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - myapp
+            topologyKey: kubernetes.io/hostname
+      tolerations:
+        - key: app
+          operator: Equal
+          value: kubernetes_trello
+          effect: NoSchedule
+      nodeSelector:
+        reason: kubernetes_task
+      containers:
+      - name: nginx-container
+        image: nginx  
+        ports:
+          - containerPort: 80
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 8
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 8 
+        envFrom:
+        - configMapRef:
+            name: myapp-config
+        - secretRef:
+            name: myapp-secret
+        volumeMounts:
+          - mountPath: /opt
+            name: data-volume
+        resources:
+          requests:
+            memory: "0.5Gi"
+            cpu: 0.2
+          limits:
+            memory: "1Gi"
+            cpu: 0.5
+      - name: redis-container
+        image: redis
+        volumeMounts:
+          - mountPath: /data
+            name: data-volume
+        resources:
+          requests:
+            memory: "0.5Gi"
+            cpu: 0.2
+          limits:
+            memory: "1Gi"
+            cpu: 0.5
+      volumes:
+        - name: data-volume
+          hostPath:
+            path: /data
+            type: Directory
+  replicas: 3
+  selector:
+    matchLabels:
+      type: webserver
+      
